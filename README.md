@@ -1,2 +1,2 @@
 # chen-ml
-my project
+my project of machine leaching with scala
