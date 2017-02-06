@@ -13,7 +13,6 @@
         <module>ml-feature</module>
         <module>ml-common</module>
         <module>ml-model</module>
-        <module>ml-tsinghuabigdata</module>
         <module>ml-something</module>
     </modules>
     <properties>

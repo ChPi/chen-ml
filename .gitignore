@@ -32,7 +32,4 @@ buildNumber.properties
 .pydevproject
 .scala_dependencies
 .settings
-ml-common/src/
-ml-feature/src/
-ml-model/src/
-ml-pkbigdata-loan/src/
+
