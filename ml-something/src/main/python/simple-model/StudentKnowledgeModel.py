@@ -6,10 +6,48 @@ class KnowledgeData(object):
     def __init__(self):
         self.data_file = "data"
         self.student_map = {}
+        self.student_index_map = {}
         self.knowledge_map = {}
-        self.student_size = 2
-        self.knowledge_size = 3
+        self.knowledge_index_map = {}
+        self.student_index = 0
+        self.knowledge_index = 0
+        self.knowledge_size = 1409
+        self.student_size = 6367
         self.x_student, self.x_knowledge, self.y_rate = self.load_data()
+
+    def add_student_map_(self, student, index):
+        self.student_map[student] = index
+        self.student_index_map[index] = student
+
+    def add_knowledge_map_(self, knowledge, index):
+        self.knowledge_map[knowledge] = index
+        self.knowledge_index_map[index] = knowledge
+
+    def student2index(self, student):
+        if student in self.student_map:
+            student_ = self.student_map[student]
+        else:
+            student_ = self.student_index
+            self.add_student_map_(student, student_)
+            self.student_index += 1
+        return student_
+
+    def knowledge2index(self, knowledge):
+        if knowledge in self.knowledge_map:
+            knowledge_ = self.knowledge_map[knowledge]
+        else:
+            knowledge_ = self.knowledge_index
+            self.add_knowledge_map_(knowledge, knowledge_)
+            self.knowledge_index += 1
+        return knowledge_
+
+    def save_map(self, student_map_file, knowledge_map):
+        with open(student_map_file, "w") as f:
+            for i, j in self.student_index_map.items():
+                f.write(str(i) + "\t" + str(j) + "\n")
+        with open(knowledge_map, "w") as f:
+            for i, j in self.knowledge_index_map.items():
+                f.write(str(i) + "\t" + str(j) + "\n")
 
     def load_data(self):
         student_list = []
@@ -19,10 +57,11 @@ class KnowledgeData(object):
         # student a--kn1,kn2--rate1,rate2
         with open(self.data_file) as f:
             for i in f:
-                student, knowledge_str, rate = i.strip().split("--", 2)
-                student = int(student)
-                knowledges = list(map(int, knowledge_str.split(",")))
-                print(knowledges)
+                student_, knowledge_str, rate = i.strip().split("--", 2)
+                student = self.student2index(student_)
+                print("student size: " + str(self.student_size))
+                knowledges = list(map(self.knowledge2index, knowledge_str.split(",")))
+                print("knowledge size:" + str(self.knowledge_size))
                 rates = list(map(float, rate.split(",")))
 
                 knowledge_array = np.zeros(self.knowledge_size)
@@ -71,9 +110,10 @@ class KnowledgeModel(object):
 
     @property
     def predict(self):
-        w = self.coefficient.eval(session=self.sess)
-        np.fill_diagonal(w, 1)
-        self.coefficient.assign(w).eval(session=self.sess)
+        # w = self.coefficient.eval(session=self.sess)
+        # np.fill_diagonal(w, 1)
+        self.coefficient = self.coefficient / tf.diag_part(self.coefficient)
+        # self.coefficient.assign(w).eval(session=self.sess)
         # print("coefficient------------------------")
         # print(self.coefficient.eval(session=self.sess))
         res1 = tf.matmul(self.x, self.coefficient)
@@ -85,10 +125,23 @@ class KnowledgeModel(object):
         y_ = res3 * self.x
         return y_
 
+    def save_params(self, coefficient_param_file, knowledge_param_file):
+        print("start writing coefficient...")
+        self.coefficient = self.coefficient / tf.diag_part(self.coefficient)
+        coefficient_param = self.coefficient.eval(session=self.sess)
+        coefficient_param = coefficient_param.round(4)
+        np.savetxt(coefficient_param_file, coefficient_param, fmt='%10.4f', delimiter=",")
+        print("coefficient write done. ")
+        print("start writing knowledge param...")
+        knowledge_param = self.student_knowledge_real.eval(session=self.sess)
+        knowledge_param = knowledge_param.round(4)
+        np.savetxt(knowledge_param_file, knowledge_param, fmt='%10.4f', delimiter=",")
+        print("knowledge param write done. ")
+
+        pass
+
     def fit(self, x, student, y):
-        print(x)
         print("student------")
-        print(student)
         y_ = self.predict
         # cross_entropy = -tf.reduce_sum(self.y * tf.log(y_))
         # cross_entropy = tf.reduce_sum(tf.pow(1 - (self.y / y_), 2))
@@ -96,10 +149,10 @@ class KnowledgeModel(object):
         train_step = tf.train.AdamOptimizer(0.1).minimize(cross_entropy)
         # train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
         self.sess.run(tf.global_variables_initializer())
-        for i in range(1000):
+        for i in range(400):
             train_step.run(session=self.sess, feed_dict={self.x: x, self.y: y, self.student: student})
             accuracy = tf.reduce_mean(tf.pow(y_ - y, 2))
-            if 0 == i % 50:
+            if 0 == i % 5:
                 print("coefficient------------------------")
                 w = self.coefficient.eval(session=self.sess)
                 np.fill_diagonal(w, 1)
@@ -108,14 +161,13 @@ class KnowledgeModel(object):
                 print(self.predict.eval(session=self.sess, feed_dict={self.x: x, self.y: y, self.student: student}))
                 print("knowledge------------------------")
                 print(self.student_knowledge_real.eval(session=self.sess, feed_dict={self.x: x, self.y: y, self.student: student}))
-                print("accuracy------------------------")
+                print("iter: %s accuracy------------------------"%(i))
                 print(accuracy.eval(session=self.sess, feed_dict={self.x: x, self.y: y, self.student: student}))
 
 
 if __name__ == '__main__':
     knowledge_data = KnowledgeData()
+    knowledge_data.save_map("student_index", "knowledge_index")
     model = KnowledgeModel(knowledge_data.knowledge_size, knowledge_data.student_size)
     model.fit(knowledge_data.x_knowledge, knowledge_data.x_student, knowledge_data.y_rate)
-
-
-
+    model.save_params("coefficient_params.csv", "knowledge_params.csv")
